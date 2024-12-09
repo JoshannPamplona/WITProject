@@ -10,23 +10,47 @@ try {
     $conn = new PDO("sqlsrv:server=$dbServer;Database=$dbName", $dbUser, $dbPassword);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Check if the form is submitted to add a new student
+    // Fetch courses for the dropdown
+    $courseQuery = "SELECT * FROM Courses";
+    $courseStmt = $conn->query($courseQuery);
+    $courses = $courseStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Handle form submission for adding a new student
     if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_student'])) {
         $studentName = $_POST['name'];
         $studentEmail = $_POST['email'];
 
-        // Insert new student into the database
-        $sql = "INSERT INTO Students (name, email) VALUES (?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->execute([$studentName, $studentEmail]);
+        // Insert the new student into the database
+        $studentSql = "INSERT INTO Students (name, email) VALUES (?, ?)";
+        $studentStmt = $conn->prepare($studentSql);
+        $studentStmt->execute([$studentName, $studentEmail]);
 
         echo "<p>Student added successfully!</p>";
     }
 
-    // Retrieve all students from the database
-    $sql = "SELECT * FROM Students";
-    $stmt = $conn->query($sql);
-    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Handle form submission for registering a student for a course
+    if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['register_student'])) {
+        $studentId = $_POST['student_id'];
+        $courseId = $_POST['course_id'];
+
+        // Insert registration into the Registrations table
+        $registrationSql = "INSERT INTO Registrations (student_id, course_id) VALUES (?, ?)";
+        $registrationStmt = $conn->prepare($registrationSql);
+        $registrationStmt->execute([$studentId, $courseId]);
+
+        echo "<p>Student registered for the course successfully!</p>";
+    }
+
+    // Fetch all registrations
+    $registrationQuery = "
+        SELECT r.id, s.name AS student_name, c.course_name, r.registration_date
+        FROM Registrations r
+        JOIN Students s ON r.student_id = s.id
+        JOIN Courses c ON r.course_id = c.id
+    ";
+    $registrationStmt = $conn->query($registrationQuery);
+    $registrations = $registrationStmt->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
@@ -41,6 +65,7 @@ try {
     <h1>WIT Student Registration</h1>
 
     <!-- Form to Add a New Student -->
+    <h2>Add a New Student</h2>
     <form method="POST">
         <label for="name">Name:</label>
         <input type="text" id="name" name="name" required>
@@ -51,25 +76,45 @@ try {
         <button type="submit" name="add_student">Add Student</button>
     </form>
 
-    <h2>Registered Students</h2>
-    <!-- Display the list of students -->
+    <!-- Form to Register a Student for a Course -->
+    <h2>Register a Student for a Course</h2>
+    <form method="POST">
+        <label for="student_id">Student ID:</label>
+        <input type="number" id="student_id" name="student_id" required>
+        <br>
+        <label for="course_id">Course:</label>
+        <select id="course_id" name="course_id" required>
+            <?php foreach ($courses as $course): ?>
+                <option value="<?php echo htmlspecialchars($course['id']); ?>">
+                    <?php echo htmlspecialchars($course['course_name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <br>
+        <button type="submit" name="register_student">Register Student</button>
+    </form>
+
+    <!-- Display the List of Course Registrations -->
+    <h2>Course Registrations</h2>
     <table border="1">
         <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Email</th>
+            <th>Registration ID</th>
+            <th>Student Name</th>
+            <th>Course Name</th>
+            <th>Registration Date</th>
         </tr>
-        <?php if (!empty($students)): ?>
-            <?php foreach ($students as $student): ?>
+        <?php if (!empty($registrations)): ?>
+            <?php foreach ($registrations as $registration): ?>
                 <tr>
-                    <td><?php echo htmlspecialchars($student['id']); ?></td>
-                    <td><?php echo htmlspecialchars($student['name']); ?></td>
-                    <td><?php echo htmlspecialchars($student['email']); ?></td>
+                    <td><?php echo htmlspecialchars($registration['id']); ?></td>
+                    <td><?php echo htmlspecialchars($registration['student_name']); ?></td>
+                    <td><?php echo htmlspecialchars($registration['course_name']); ?></td>
+                    <td><?php echo htmlspecialchars($registration['registration_date']); ?></td>
                 </tr>
             <?php endforeach; ?>
         <?php else: ?>
             <tr>
-                <td colspan="3">No students found.</td>
+                <td colspan="4">No registrations found.</td>
             </tr>
         <?php endif; ?>
     </table>
